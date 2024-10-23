@@ -37,6 +37,9 @@ local IMMEDIATE, BUFFERED = 0, 1
 local CommandBuffer = {}
 local CommandMode = IMMEDIATE
 
+
+-- 	Executes a GMA2 Command
+-- 	Params use string.format order
 function Cmd(...)
 	if CommandMode == IMMEDIATE then
 		gma.cmd(string.format(...))
@@ -45,22 +48,30 @@ function Cmd(...)
 	end
 end
 
+-- 	Runs all awaiting commands in CommandBuffer
+--	Clears CommandBuffer
 local function CmdFlushBuffer()
 	gma.cmd(table.concat(CommandBuffer, '; '))
 	CommandBuffer = {}
 end
 
+--	Print a debug line in terminal
+--	Params use string.format order 
 function Debug(...)
 	if (true) then
 		gma.echo(string.format(...))
 	end
 end
 
+--	Checks if a slot is Empty
+--	@param (string) object_type (Effect, Image, Sequence, Preset...)
+-- 	@param (string) id (1, "MyGroup", 4.2...)
+--	@return true if slot is empty, false otherwise
 local function checkSlot(object_type, id)
-	
-	return Show.getobj.handle(string.format("%s %d", object_type, id)) == nil
+	return Show.getobj.handle(string.format("%s %s", object_type, id)) == nil
 end
 
+--	Checks if (length) (object_types) are empty starting from id (first_id)
 local function checkRange(object_type, first_id, length)
 
 	local range_is_empty = true
@@ -80,6 +91,11 @@ local function checkRange(object_type, first_id, length)
 	return range_is_empty, next_free_slot
 end 
 
+
+-- 	Returns the first id of (length) free objects in a row
+--	@param (string) object_type "Image, Sequence, Macro..."
+--	@param (int) first_id first id used to search
+-- 	@param (int) length amount of free objects to find
 local function findFreeRange(object_type, first_id, length)
 
 	Debug ("Seeking a range of %d %s(s) starting from %d", length, object_type, first_id)
@@ -96,6 +112,16 @@ local function findFreeRange(object_type, first_id, length)
 
 end
 
+--	Creates an executor from given group/object
+--	@param (string) group: Group on which will be applied the object
+--	@param (string) object_name: Object to apply on the group (e.g: Effect 1, Preset 0.1 ...)
+--	@param (string)	label: Label of the executor (or cue) (optionnal)
+--	@param (string) exec: Executor to write to (e.g: 5, 100.101 ...)
+--  @param (int) cue: Cue used when storing (optionnal: default=1)
+--	@param (string) cmd: Command to inject on the Cue (optionnal)
+--	@param (string) func: Function to assign on the executor (e.g: Go, Goto, Flash, Temp ...) (optionnal)
+--	@param (float) fade: Fade time applied to the cue (optionnal)
+--	@param (float) offtime: Executor offtime (optionnal) 
 function executorFromObject(group, object_name, label, exec, cue, cmd, func, fade, offtime)
 
 	local cue_chunk = '';
@@ -138,6 +164,11 @@ function executorFromObject(group, object_name, label, exec, cue, cmd, func, fad
 	
 end 
 
+--  Ensure Images that will be used in a Layout exist, thus preventing broken links
+--	@param (int) guiImage: Image used in Layout
+--	@param (int) activeImage: source Image used in active state
+--	@param (int) inactiveImage: source Image used in inactive state
+--	@param (int) placeholder: source Image used as placeholder if absent from image pool 
 local function prepareLayoutImages(guiImage, activeImage, inactiveImage, placeholder)
 	if (checkSlot('Image', guiImage)) then Cmd("Copy Image %d At %d", placeholder, guiImage) end
 	if (checkSlot('Image', activeImage)) then Cmd("Copy Image %d At %d", placeholder, activeImage) end
@@ -148,8 +179,9 @@ local function ObjectName(object_type, prefix, id)
 	return string.format("%s %s%s%d", object_type, prefix or '', prefix and '.' or '', id)
 end
 
-function createPicker(object_type, prefix, config, colorize, pickerVarsPrefix)
+function createPicker(object_type, prefix, config, colorize, pickerVarsPrefix, group_offset)
 
+	group_offset = group_offset or 0
     local exec = 101
 	local row = 1
 	local content_width = (config.LastId - config.FirstId)
@@ -168,12 +200,9 @@ function createPicker(object_type, prefix, config, colorize, pickerVarsPrefix)
 		config.FirstMacroId = findFreeRange('Macro', config.FirstMacro, used_macros)	
 	end 
 	
-	Cmd("ClearAll")
-	
 	for group = config.FirstGroup, config.LastGroup do
-		Cmd("ClearAll")
 		local group_label = Show.getobj.label(Show.getobj.handle(string.format("Group %d", group))) or 'Group'
-		Cmd("Group %d", group)
+		Cmd("Clear ; Group %d", group)
 		
 		local group_fixtures_count = tonumber(Show.getvar("SELECTEDFIXTURESCOUNT"))
 		
@@ -181,7 +210,7 @@ function createPicker(object_type, prefix, config, colorize, pickerVarsPrefix)
 		
 		for id = config.FirstId, config.LastId do
 			
-			local object_name = ObjectName(object_type, prefix, id)
+			local object_name = ObjectName(object_type, prefix, id + (group_offset * (row-1)))
 			local macro = ''
 									
 			Cmd("ClearAll; Selfix %s; If Group %d", object_name, group)
@@ -199,6 +228,7 @@ function createPicker(object_type, prefix, config, colorize, pickerVarsPrefix)
 				
 				executorFromObject(group, object_name, object_label or '--', config.Page .. '.' .. exec, 1, cmd, "go")
 				Cmd('Label Executor %d.%d "%s"', config.Page, exec, group_label)
+				
 				if colorize then
 					if type(colorize) == 'table' and #colorize == 3 then
 						cmd = string.format("/r=%d /g=%d /b=%d", colorize[1], colorize[2], colorize[3])
@@ -215,8 +245,8 @@ function createPicker(object_type, prefix, config, colorize, pickerVarsPrefix)
 				if config.UseLayout then
 					
 					local macro_id = config.FirstMacroId + (row-1)*16 + col
-					local inactiveImage = config.FirstInactiveImage + col - 1
-					local activeImage = config.FirstActiveImage + col - 1
+					local inactiveImage = config.FirstInactiveImage + col + (row-1)*group_offset - 1
+					local activeImage = config.FirstActiveImage + col + (row-1)*group_offset - 1
 					
 					prepareLayoutImages(macro_id, activeImage, inactiveImage, 16)
 					
@@ -224,6 +254,9 @@ function createPicker(object_type, prefix, config, colorize, pickerVarsPrefix)
 					
 					Cmd('Store Macro %d', macro_id)
 					Cmd('Store Macro 1.%d.1 "%s"', macro_id, macro_cmd)
+					
+					config.LayoutXOffset = config.LayoutXOffset or 0
+					config.LayoutYOffset = config.LayoutYOffset or 0					
 					
 					Layout[#Layout+1] = layout_add_macro(macro_id, config.LayoutXOffset + col*1.1 - 1 , config.LayoutYOffset + row*1.1 - 1, macro_id)
 					
@@ -327,7 +360,7 @@ function temp_goboPicker()
 
 --
 --  TEMPORARY GOBO PICKER - do NOT USE IN PRODUCTION - test show hardvalues everywhere !!
---
+--  seriously, do yourself a favor, don't try using this ;)
 
 	local layout = {}
 	local row = 0
@@ -416,7 +449,7 @@ function getFixtures(group)
 			local indices = {string.find(xml[i],'\"%d+\"')}
 			indices[1], indices[2] = indices[1] + 1, indices [2] - 1
 
-			fixtures[#fixtures + 1] = string.format("%s %s", objectType, string.sub(xml[i],indices[1], indices[2]))
+			fixtures[#fixtures+1] = string.format("%s %s", objectType, string.sub(xml[i],indices[1], indices[2]))
 
 		end
 	end
@@ -424,16 +457,3 @@ function getFixtures(group)
 end
 
 ShowConfig.Loaded = true
-
-local function Start()
-
-end
-
-local function Cleanup()
-	local progressBar = gma.gui.progress.start("Cleaning up...")
-	for i = 0, progressBar + 64 do
-		gma.gui.progress.stop(i)
-	end
-end
-
-return Start,Cleanup;

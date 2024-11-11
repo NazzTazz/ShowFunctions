@@ -6,8 +6,7 @@ local base = _G
 local Obj = {
 	ObjectType = '',		-- "Fixture", "Preset", "Image"
 	Prefix = nil,			-- ExecutorPage, PresetType
-	Id = nil,
-	_offset = 0
+	Id = nil
 }
 
 local _M = Obj

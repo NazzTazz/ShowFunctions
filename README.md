@@ -2,10 +2,9 @@
 ShowFunctions is a LUA library for MA Lighting GrandMa 2 Series of lighting desks (Including OnPC)
 It allows LUA enthousiasts to easily write plugins for their own showfiles.
 
-## Need a fancy color picker, with customizable images, for groups 1 thru 6 ?
+## Need an old school color picker, for groups 1 thru 5 ?
 
-'''
-
+```lua
 local SF = require("showfunctions")
 
 local Picker = {
@@ -20,8 +19,7 @@ local Picker = {
 	}
 }
 
-SF.Picker:New(Picker):Generate()
-
-'''
+Picker = SF.Picker:New(Picker):Generate()
+```
 
 	

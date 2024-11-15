@@ -16,7 +16,7 @@ function Obj:Handle()
 end
 
 function Obj:New(args)
-    local o = setmetatable({}, self)
+    local o = setmetatable(type(args) == table and args or {}, self)
 	if args then
 		if type(args) == "string" then
 			o._Name = args 
@@ -29,9 +29,8 @@ function Obj:New(args)
 	return o:Parse()
 end
 
-function Obj:Name(args)
-	offset = args and args.offset or 0
-	return string.format("%s %s%s%d", Obj._Normalize(self.ObjectType), self.Prefix or '', self.Prefix and '.' or '', self.Id + offset)
+function Obj:Name()
+	return string.format("%s %s%s%d", Obj._Normalize(self.ObjectType), self.Prefix or '', self.Prefix and '.' or '', self.Id)
 end
 
 function Obj:__tostring()
@@ -43,23 +42,23 @@ function Obj:__tonumber()
 end 
 
 function Obj._Normalize(str)
-	return string.upper(string.sub(str, 1, 1))..string.lower(string.sub(str, 2))
+	return string.upper(string.sub(str, 1, 1)) .. string.lower(string.sub(str, 2))
 end
 
 function Obj:Parse()
 	if self._Name then self.ObjectType, self.Prefix, self.Id = string.match(self._Name, "^(%S*)%s*(%d*)%.?(%d+)$") end
-	self.ObjectType = Obj._Normalize(self.ObjectType)
 	return self 
 end 
 
-function Obj:Label()
-	return Object.label(tonumber(self))
+function Obj:Label(label)
+	label and Cmd('Label %s "%s"', self:Name(), label)
+	return Object.label(self:Handle())
 end
 
 function Obj.SplitChunk(chunk)
     -- Pattern to match the structure "Class a.b THRU c.d"
     -- The components Class, a, and c are optional
-    local class, a, b, c, d = chunk:match("^(%S*)%s*(%d*)%.?(%d+)%s+THRU%s*(%d*)%.?(%S+)$")
+    local class, a, b, c, d = chunk:upper():match("^(%S*)%s*(%d*)%.?(%d+)%s+THRU%s*(%d*)%.?(%S+)$")
     -- If any component is absent, assign nil
     return class ~= "" and class or nil, a ~= "" and a or nil, b, c ~= "" and c or nil, d
 end
@@ -69,7 +68,7 @@ end
 -- 	@param (string) id (1, "MyGroup", 4.2...)
 --	@return true if slot is empty, false otherwise
 function Obj.isEmpty(objectType, id)
-	return Object.handle(string.format("%s %s", objectType, id)) == nil
+	return id and (Object.handle(string.format("%s %s", objectType, id)) == nil) or objectType:Handle() == nil
 end
 
 --	Checks if (length) (objectType(s)) are empty starting from id (firstId)
@@ -141,22 +140,39 @@ function Obj.List(expression, objectType)
     return objects
 end
 
-function Obj.getFixtures(source)
-
-	-- source:
-	--   number: Group Id
-	--   string: 
-
+-- source:
+--   number: Group Id
+--   string: Object
+--   table with .Name: assume source is self -- instance:GetFixtures()
+--	 nil: From programmer 
+function Obj.GetFixtures(source)
 	local objectType
-	local xml = {}
 	local fixtures = {}
 	local file = {}
 
 	file.name =	'_tmp_fxtlst.xml'
 	file.path =	gma.show.getvar('PATH')..'/'..'importexport'..'/' .. file.name
 
-	Cmd('SelectDrive 1')
-	Cmd('Export Group %d "%s"', group, file.name)
+	if source and type(source) == "number" then -- Group Id 
+		Cmd("Selfix Group %d", source)
+	elseif source and type(source) == "string" then -- Object to Selfix
+		Cmd("Selfix %s", source)
+	elseif source and type(source) == table and source.Name 
+		Cmd("Selfix %s", source:Name())
+	else -- Selection in programmer
+		-- do nothing
+	end
+	
+	local test_group = Obj.FindFreeRange("Group", 500, 1)
+
+	Cmd('Store Group %d', test_group)
+	Cmd('SelectDrive 1')	
+	Cmd('Export Group %d "%s"', test_group, file.name)
+	Cmd('Clear')
+	
+	source or Cmd('Group %d', test_group) -- Restore selection in programmer
+	
+	Cmd('Delete Group %d /nc', test_group)
 
 	for line in io.lines(file.path) do
 		if (string.find(line, 'Subfixture fix_id') 

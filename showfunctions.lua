@@ -36,16 +36,16 @@ Show, User, Gui, Object = gma.show, gma.user, gma.gui, gma.show.getobj;
 
 -- SUB-MODULES AND PACKAGE TABLES
 
-local SF = { _debug = true }
-local Tools = require("showfunctions.tools")
-local Obj = require("showfunctions.obj")
-local Executor = require("showfunctions.executor")
-local Layout = require("showfunctions.layout")
-local Picker = require("showfunctions.picker")
-
--- local Bitmap = require("showfunctions.bitmap")
-
-SF.Obj, SF.Picker, SF.Executor, SF.Layout--[[, SF.Bitmap]] = Obj, Picker, Executor, Layout--[[, Bitmap]] --
+local SF = { 
+	_debug = true,
+	
+	Tools = require("showfunctions.tools"),
+	Obj = require("showfunctions.obj"),
+	Executor = require("showfunctions.executor"),
+	Layout = require("showfunctions.layout"),
+	Bitmap = require("showfunctions.bitmap"),
+	Picker = require("showfunctions.picker")
+}
 
 local _M = SF
 
@@ -93,4 +93,75 @@ function _M.createSpecials(config)
 end
 
 
+function _M._show_progress(view, index)    
+
+    hView = io.open(gma.show.getvar('PATH').."/importexport/tempview.xml", "w")
+    
+    local xml = '<?xml version="1.0" encoding="utf-8"?><MA xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://schemas.malighting.de/grandma2/xml/MA" xsi:schemaLocation="http://schemas.malighting.de/grandma2/xml/MA http://schemas.malighting.de/grandma2/xml/3.9.60/MA.xsd" major_vers="3" minor_vers="9" stream_vers="60">    <Info datetime="" showfile="" /><View index="1" name="PROGRESSION" display_mask="32"><BitMap width="96" height="48"><Image>'
+    hView:write(xml)    
+    
+    local progress = math.floor(index * 32/100)
+    
+    local filled = progress
+    local black = 32 - progress
+    
+    local white_chunk = "fwAA/38AAP9/AAD/"
+    local black_chunk = "AAAA/wAAAP8AAAD/"
+    
+    local scanline = white_chunk:rep(filled) .. black_chunk:rep(black)
+    
+    hView:write(string.rep(scanline, 48))    
+    
+    hView:write('</Image></BitMap></View></MA>')
+    hView:close()
+
+    gma.cmd('Import "tempview.xml" At View '.. view ..' /nc /o')
+
+    os.remove(gma.show.getvar('PATH').."/importexport/tempview.xml")
+
+end
+
+function _M.import_gobo_image(data, active_index, inactive_index, suffix)
+    gma.echo("Importing gobo image to show (UserImages "..active_index.."+"..inactive_index..")")
+    
+    suffix = suffix or ''
+
+
+    local active_cache = gma.show.getvar('PATH') .."/importexport/gobo_cache_active_"..suffix..".xml"    
+    local inactive_cache = gma.show.getvar('PATH') .."/importexport/gobo_cache_inactive_"..suffix..".xml"    
+    
+    local hAf = io.open(active_cache, "r")    
+    local hIf = io.open(inactive_cache, "r")
+        
+    if (hAf and hIf) then
+        -- Images already generated for this fixture/wheel/gobo 
+        -- import from cache
+        hAf:close()
+        hIf:close()
+        gma.echo('-> Reading from cache')
+        gma.cmd('Import "gobo_cache_active_'..suffix..'.xml" Image '..active_index..' /o /nc ')
+        gma.cmd('Import "gobo_cache_inactive_'..suffix..'.xml" Image '..inactive_index..' /o /nc ')
+    else
+        gma.echo('No cache for this gobo')
+        local raw_thumbnail_data = base64_decode(data)
+
+        local active_gobo = import_thumbnail(raw_thumbnail_data, 64, 64)
+        
+        if active_gobo == nil then
+            gma.gui.confirm("Error", "Couldn't properly import thumbnail data")
+            return nil
+        end    
+        
+        local inactive_gobo = new_image(64, 64, active_gobo) -- Deep-copy 3d table    
+        
+        add_border(active_gobo) -- Adds a white border to selected gobos in gobo picker
+
+        export_bitmap(active_gobo, gma.show.getvar('PATH') .."/images/active"..suffix..".bmp", active_index, 'gobo_cache_active_'..suffix)
+        
+        darken_image(inactive_gobo, 0.35)
+
+        export_bitmap(inactive_gobo, gma.show.getvar('PATH').."/images/inactive"..suffix..".bmp", inactive_index, 'gobo_cache_inactive_'..suffix)
+    end 
+
+end 
 return _M

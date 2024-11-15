@@ -22,12 +22,12 @@ function Debug(...)
 	end
 end
 
-function tableToString(tbl, indent)
+function TableToString(tbl, indent)
     if not indent then
         indent = ""
     end
 
-    local result = "{\n"
+    local str = "{\n"
     local newIndent = indent .. "  "
 
     for k, v in pairs(tbl) do
@@ -39,25 +39,16 @@ function tableToString(tbl, indent)
         end
 
         if type(v) == "table" then
-            result = result .. newIndent .. key .. " = " .. tableToString(v, newIndent) .. ",\n"
+            str = str .. newIndent .. key .. " = " .. TableToString(v, newIndent) .. ",\n"
         elseif type(v) == "string" then
-            result = result .. newIndent .. key .. " = " .. string.format("%q", v) .. ",\n"
+            str = str .. newIndent .. key .. " = " .. string.format("%q", v) .. ",\n"
         else
-            result = result .. newIndent .. key .. " = " .. tostring(v) .. ",\n"
+            str = str .. newIndent .. key .. " = " .. tostring(v) .. ",\n"
         end
     end
 
-    result = result .. indent .. "}"
-    return result
-end
-
--- Builds an Object Name String (e.g., Preset 4.1, Fixture 8)
--- @param objectType Type of the object (e.g., Preset, Effect, Fixture...)
--- @param poolId Object's [pool.]id (4.1, 5, 9)
--- @param offset Translate Ids in the same pool
-function _M:ObjectName(objectType, poolId, offset) -- legacy
-	Debug("Tools:ObjectName() is deprecated")
-	return Obj.New{ObjectType=objectType, Id=poolId, offset}:Name()
+    str = str .. indent .. "}"
+    return str
 end
 
 return _M

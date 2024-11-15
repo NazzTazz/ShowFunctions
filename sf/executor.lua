@@ -3,7 +3,9 @@
 
 local base = _G
 
-local Executor = { properties = {} }
+local Executor = { 
+	Page = 0
+}
 
 local _M = Executor 
 
@@ -22,6 +24,16 @@ local _M = Executor
 -- function Executor:FromObject(group, obj, label, exec, cue, cmd, func, fade, offtime)
 -- label, exec, cue, cmd, func, fade, offtime
 function Executor:FromObject(group, obj, opts)
+	c = opts.colorize
+	if c then
+		if type(c) == 'table' and #c == 3 then
+			opts.appearance = string.format("/r=%d /g=%d /b=%d", c[1], c[2], c[3])
+		elseif type(c) == 'string' and c == 'Group' then
+			opts.appearance = string.format("At %s", group)
+		elseif type(c) == 'string' and c == 'Object' then 
+			opts.appearance = string.format("At %s", obj)
+		end 
+	end
 	opts.exec = opts.cue and string.format("Cue %d Executor %s", opts.cue, opts.exec) or string.format("Executor %s", opts.exec)
 	Cmd("Group %s; At %s; Store %s /o; ClearAll", group, obj, opts.exec)
 	opts.label and Cmd('Label %s "%s"', opts.exec, opts.label)

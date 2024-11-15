@@ -2,66 +2,121 @@
 -- Layout module 
 
 local base = _G
-local Layout = { rectangles = {}, objects = {}}; 
+local Layout = { rectangles = {}, objects = {}, geometry = {}}; 
 local _M = Layout 
 
-local LayoutElement = {
-	x = nil,
-	y = nil,
-	width = nil,
-	height = nil
-}
+function Layout:New(args)
 
-function LayoutElement:New()
-	local o = setmetatable({}, { __index = self }
+	local o = Obj:New()
+	setmetatable(o, Layout)
+	
+	if args and type(args) == 'string' then
+		o._Name = args
+		return o:Parse()
+	elseif args and type(args) == 'table' then
+		for k, v in pairs (args) do
+			o[k] = v 
+		end 
+		return o:Parse()
+	elseif args and type(args) == 'number' then
+		o._Name = "Layout " .. args
+		return o:Parse()
+	elseif args ~= nil then 
+		error("Layout:New() : Invalid args")
+	end
+	
 	return o
 end 
 
-function Layout:New()
-    local o = setmetatable({}, { __index = self })
-    return o
-end
+function Layout:PercentToAbsolute(geometry)
+
+	if geometry.left and type(geometry.left) == 'string' and string.sub(geometry.left, -1) == '%' then		
+		geometry.left = self.geometry.width * tonumber(string.sub(geometry.left, 1, string.len(geometry.left) -1)) / 100
+		geometry.left = math.floor(geometry.left / 0.05 + 0.5) * 0.05 
+	end 
+	if geometry.width and type(geometry.width) == 'string' and string.sub(geometry.width, -1) == '%' then		
+		geometry.width = self.geometry.width * tonumber(string.sub(geometry.width, 1, string.len(geometry.width) -1)) / 100
+		geometry.width = math.floor(geometry.width / 0.05 + 0.5) * 0.05 
+	end 
+	if geometry.top and type(geometry.top) == 'string' and string.sub(geometry.top, -1) == '%' then		
+		geometry.top = self.geometry.height * tonumber(string.sub(geometry.top, 1, string.len(geometry.top) -1)) / 100
+		geometry.top = math.floor(geometry.top / 0.05 + 0.5) * 0.05 
+	end 
+	if geometry.height and type(geometry.height) == 'string' and string.sub(geometry.height, -1) == '%' then		
+		geometry.height = self.geometry.height * tonumber(string.sub(geometry.height, 1, string.len(geometry.height) -1)) / 100
+		geometry.height = math.floor(geometry.height / 0.05 + 0.5) * 0.05 
+	end 
+end 
+
+function Layout:UpdateBounds(geometry)
+	
+	-- Update each bound if needed
+
+	self.geometry.left   = math.min(tonumber(self.geometry.left),  geometry.x)
+	self.geometry.right  = math.max(tonumber(self.geometry.right), geometry.x + geometry.width)
+	self.geometry.top    = math.min(tonumber(self.geometry.top),   geometry.y)
+	self.geometry.bottom = math.max(tonumber(self.geometry.bottom),   geometry.y + geometry.height)
+
+	-- Calculate new footprint
+
+	self.geometry.width = self.geometry.right - self.geometry.left
+	self.geometry.height = self.geometry.bottom - self.geometry.top
+
+end 
 
 function Layout:addRectangle(geometry, text)
+
+	self:PercentToAbsolute(geometry)
 	self.rectangles[#self.rectangles+1] = string.format(self.xmlTemplate.rectangle, geometry.x, geometry.y, 
 														geometry.height, geometry.width, text or "")
+	self:UpdateBounds(geometry)	
 	return self
 end 
 
 function Layout:addMacro(id, geometry, image)
-    local xml 
+
+	self:PercentToAbsolute(geometry)
 	local image_chunk = '<image />'
 	local extra = ''
 	local style = image and "Simple" or "Pool Item"
     if image then	
 		extra = ' image_size="Fit"'
+		image_chunk = string.format('<image name="Image"><No>8</No><No>%d</No></image>', image.id)
+		
 		if image.rotation and (image.rotation == 90 or image.rotation == 180 or image.rotation == 270) then
 			extra = extra .. string.format(' image_rotation="%d°"', image.rotation)
 		end		
-		image_chunk = string.format('<image name="Image"><No>8</No><No>%d</No></image>', image.id)		
 	end    
     self.objects[#self.objects+1] = string.format(self.xmlTemplate.macro, geometry.x or 0, geometry.y or 0, 
 												  geometry.height or 1, geometry.width or 1, style, extra, image_chunk, id)
+	self:UpdateBounds(geometry)
+	return self
 end
 
 function Layout:Store(id)
+
+	id = id or self.Id
 	local file = {}	
 	file.name = "_import_layout.xml"
 	file.path = Show.getvar('PATH') .. "/importexport/"
 	file.xml = file.path .. file.name
+	
 	file.data = io.open(file.xml, "w")	
     file.data:write(self.xmlTemplate.header)    
     file.data:write(table.concat(self.objects))    
     file.data:write('</CObjects>')	
+	
 	if #self.rectangles > 0 then	
 		file.data:write('<Rectangles>')
 		file.data:write(table.concat(self.rectangles))
 		file.data:write('</Rectangles>')	
 	end	
+	
 	file.data:write(self.xmlTemplate.footer)   
     file.data:close()    
     Cmd('Import "%s" at layout %d /nc', file.name, id)    
     os.remove(file.xml)	
+	
 	return self
 end
 

@@ -3,6 +3,7 @@
 
 local base = _G
 local Obj = require("showfunctions.obj")
+local Tools = require("showfunctions.tools")
 local Executor = require("showfunctions.executor")
 local Layout = require("showfunctions.layout")
 local string = require("string")
@@ -43,16 +44,14 @@ local Picker = {
 
 _M = Picker 
 
-function Picker.ApplyDefaults(target, defaults)
-	-- if defaults not provided, assume target is self 
-	defaults = defaults or target.Defaults or error("Boo.")
+local function ApplyDefaults(target, defaults)
     for key, value in pairs(defaults) do
         if type(value) == "table" then
             if type(target[key]) ~= "table" then
                 target[key] = {}
             end
             -- Recursively apply defaults to nested tables
-            Picker.ApplyDefaults(target[key], value)
+            ApplyDefaults(target[key], value)
         else
             -- If the value is not present, apply the default value
             if target[key] == nil then
@@ -62,18 +61,6 @@ function Picker.ApplyDefaults(target, defaults)
     end
 end
 
-function Picker:New(o)
-	if not o or not o.Ranges or not o.Executors then
-		return nil, "Invalid properties provided"
-	end 	
-    local obj = setmetatable(o, self)
-    obj.__index = self     
-
-	o:ApplyDefaults()
-	o:Init()
-
-	return obj
-end
 
 function Picker:Init()
 	self.Groups = Obj.List(self.Ranges.Groups) -- FIXME Method=Copy: No groups
@@ -101,7 +88,22 @@ function Picker:Init()
 		end 
 		self.Layout.Images.Start = image_start 
 	end 
+	return self
 end
+
+function Picker:New(o)
+
+	if not o or not o.Ranges or not o.Executors then
+		return nil, "Invalid properties provided"
+	end 	
+    local obj = setmetatable(o, self)
+    obj.__index = self     
+
+	ApplyDefaults(obj, Picker.Defaults)
+	DebugTable("After Applying Defaults:", obj)
+	return obj:Init()
+end
+
 
 function Picker.prepareLayoutImages(guiImage, activeImage, inactiveImage, placeholder)
     if (Obj.IsEmpty('Image', activeImage)) then Cmd("Copy Image %d At %d", placeholder, activeImage) end

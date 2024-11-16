@@ -22,6 +22,17 @@ function Debug(...)
 	end
 end
 
+function DebugTable(title, tbl)
+	if (true) then
+		local t = TableToString(tbl)
+		local i = 1
+		for line in t:gmatch("[^\n]+") do
+			Debug("%s%s", i == 1 and title..' ' or '', line)
+			i = i +1
+		end
+	end 
+end
+
 function TableToString(tbl, indent)
     if not indent then
         indent = ""

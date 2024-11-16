@@ -48,7 +48,7 @@ function Bitmap:Store(filename)
 	local file = {}
     file.name = filename or "_tmp_bmp"
     
-    export or assert(self.Id, "Can't store Bitmap without Pool Id")
+    if not filename then assert(self.Id, "Can't store Bitmap without Pool Id") end
     
     file.path = gma.show.getvar('PATH') .. '/importexport/' .. file.name .. '.xml'
 
@@ -72,7 +72,7 @@ function Bitmap:Store(filename)
     
     gma.sleep(0.05)
     
-    filename or os.remove(gma.show.getvar('PATH') ..  '/importexport/'..file.name..'.xml')
+    if not filename then os.remove(gma.show.getvar('PATH') ..  '/importexport/'..file.name..'.xml') end
 
 end
 
@@ -83,7 +83,7 @@ end
 
 -- Creates a base64 String of a 24 bits BRG Bitmap with 8-bit alpha-padding
 function Bitmap:UpdateThumbnail(filename)
-	#self._thumbnail > 0 and goto use_cache
+	if #self._thumbnail then return self end 
     local buffer = ''    
     for y = 1, self._height do 
         for x = 1, self._width do
@@ -91,7 +91,6 @@ function Bitmap:UpdateThumbnail(filename)
         end
     end    
 	self._thumbnail = self:base64_encode(buffer)
-	::use_cache::
     return self
 end
 
@@ -107,7 +106,7 @@ function Bitmap:New(args)
 	if args.color and type(args.color) == 'table' and #args.color == 3 then -- source is a RGB triplet
 		color = args.color 
 	end
-	args.data or args._data or color = {0, 0, 0} -- Black (default)
+	if not (args.data or args._data) then color = {0, 0, 0} end -- Black (default)
          
 	if args.data then -- Copy constructor 
 		if args.data.geometry then -- args.data as a Bitmap object
@@ -163,7 +162,7 @@ end
 -- Create bitmap file from data table
 function Bitmap:UpdateBitmap()
     
-	if #self._bitmap > 0 then goto use_cache end
+	if #self._bitmap > 0 then return self end
 	
     local height = count(self._data)
     local width = count(self._data[1])
@@ -185,7 +184,7 @@ function Bitmap:UpdateBitmap()
     end    
  
     self._bitmap = base64_encode(header .. bitmap)	
-	::use_cache::
+	return self
 	-- _show_import_bitmap(import_show_index, base64_encode(header .. bitmap), export_thumbnail(image), width, height, cachename)
 end
 
@@ -199,8 +198,8 @@ function Bitmap:Rectangle(x1, y1, x2, y2, color)
 	for x = x1, x2 do 
 		for y = y1, y2 do
 			self._data[x][y] = color
-		next
-	next 
+		end
+	end 
 	self:setDirty()
 end
 

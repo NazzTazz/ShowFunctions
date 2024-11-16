@@ -3,6 +3,8 @@
 
 local base = _G
 
+local Tools = require("showfunctions.tools")
+
 local Executor = { 
 	Page = 0
 }
@@ -13,7 +15,8 @@ local _M = Executor
 --	@param (string) group: Group on which will be applied the object
 --	@param (string) obj: Object to apply on the group (e.g: Effect 1, Preset 0.1 ...)
 --  @param (table) opts: Values and options
---	 (string) 		.exec: Executor to write to (e.g: 5, 100.101 ...)
+--   (int)			.page: Executor page 
+--	 (int) 			.exec: Executor to write to (e.g: 5, 101 ...)
 --   (int)    		.cue: Cue used when storing (optionnal: default=1)
 --	 (string) 		.label: Label of the executor (or cue) (optionnal)
 --	 (string) 		.cmd: Command to inject to the Cue (optionnal)
@@ -23,7 +26,7 @@ local _M = Executor
 
 -- function Executor:FromObject(group, obj, label, exec, cue, cmd, func, fade, offtime)
 -- label, exec, cue, cmd, func, fade, offtime
-function Executor:FromObject(group, obj, opts)
+function Executor.FromObject(group, obj, opts)
 	c = opts.colorize
 	if c then
 		if type(c) == 'table' and #c == 3 then
@@ -34,14 +37,14 @@ function Executor:FromObject(group, obj, opts)
 			opts.appearance = string.format("At %s", obj)
 		end 
 	end
-	opts.exec = opts.cue and string.format("Cue %d Executor %s", opts.cue, opts.exec) or string.format("Executor %s", opts.exec)
+	opts.exec = opts.cue and string.format("Cue %d Executor %d.%d", opts.cue, opts.page or gma.show.getpage(),opts.exec) or string.format("Executor %s", opts.exec)
 	Cmd("Group %s; At %s; Store %s /o; ClearAll", group, obj, opts.exec)
-	opts.label and Cmd('Label %s "%s"', opts.exec, opts.label)
-	opts.cmd and Cmd('Assign %s /cmd="%s"', opts.exec, opts.cmd)
-	opts.func and Cmd ("Assign %s %s", opts.func, opts.exec)
-	opts.fade and Cmd ("Assign Fade %d %s", opts.fade, opts.exec)
-	opts.offtime and Cmd ("Assign %s /offtime=%d", opts.exec, opts.offtime)
-	opts.appearance and Cmd("Appearance %s %s", opts.exec, opts.appearance)
+	if opts.label then Cmd('Label %s "%s"', opts.exec, opts.label) end
+	if opts.cmd then Cmd('Assign %s /cmd="%s"', opts.exec, opts.cmd) end 
+	if opts.func then Cmd ("Assign %s %s", opts.func, opts.exec) end 
+	if opts.fade then Cmd ("Assign Fade %d %s", opts.fade, opts.exec) end 
+	if opts.offtime then Cmd ("Assign %s /offtime=%d", opts.exec, opts.offtime) end 
+	if opts.appearance then Cmd("Appearance %s %s", opts.exec, opts.appearance) end 
 end
 
 return _M

@@ -1,6 +1,5 @@
 -- This file is part of ShowFunctions -- https://github.com/NazzTazz/ShowFunctions
 -- Picker module 
-
 local base = _G
 local Obj = require("showfunctions.obj")
 local Tools = require("showfunctions.tools")
@@ -10,39 +9,40 @@ local string = require("string")
 local table = require("table")
 local _M = {}
 
-local Picker = { 
-	Layout = {},
-	Defaults = {
-		Executors = {
-			Start = 101
-		},
-		Ranges = {
-			GroupOffset = 0
-		},
-		Layout = {
-			Macros = {
-				Start = 1000,
-				Overwrite = false
-			},
-			Images = {
-				GroupOffset = 0,
-				Start = 500,
-				PlaceHolder = 15,
-				Overwrite = true
-			},
-			ButtonGeometry = {
-				Width = 1,
-				Height = 1,
-				XSpacing = 0.1,
-				YSpacing = 0.1
-			},
-			XOffset = 0,
-			YOffset = 0
-		}
-	}
+local Picker = {
+    Layout = {},
+    Defaults = {
+        Executors = {
+            Start = 101,
+			Width = 15
+        },
+        Ranges = {
+            GroupOffset = 0
+        },
+        Layout = {
+            Macros = {
+                Start = 1000,
+                Overwrite = false
+            },
+            Images = {
+                GroupOffset = 0,
+                Start = 500,
+                PlaceHolder = 15,
+                Overwrite = true
+            },
+            ButtonGeometry = {
+                Width = 1,
+                Height = 1,
+                XSpacing = 0.1,
+                YSpacing = 0.1
+            },
+            XOffset = 0,
+            YOffset = 0
+        }
+    }
 }
 
-_M = Picker 
+_M = Picker
 
 local function ApplyDefaults(target, defaults)
     for key, value in pairs(defaults) do
@@ -61,160 +61,168 @@ local function ApplyDefaults(target, defaults)
     end
 end
 
-
 function Picker:Init()
-	self.Groups = Obj.List(self.Ranges.Groups) -- FIXME Method=Copy: No groups
-	self.Objects = Obj.List(self.Ranges.Objects)	
+	Debug("Picker:Init()")
+    self.Groups = Obj.List(self.Ranges.Groups) -- FIXME Method=Copy: No groups
+    self.Objects = Obj.List(self.Ranges.Objects, self.Ranges.ObjectType)
 
-	local PickerWidth = math.min(15, math.ceil(#self.Objects / 5) * 5)
+	Debug(" .. Finished parsing Ranges")
+    self.Executors.Width = math.min(15, math.ceil(#self.Objects / 5) * 5)
 
-	if #self.Objects > 15 then return nil, "Max Picker Width exceeded" end
-											 
-	local RowPadding = PickerWidth - #self.Objects
-	
-	local macro_start
-	local image_start
-	local used_macros
-	local used_images
-	
-	if self.Layout and self.Layout.Id then			
-		used_macros = 16 * #self.Groups
-		macro_start = self.Layout.Macros.Overwrite and self.Layout.Macros.Start or Obj.FindFreeRange('Macro', self.Layout.Macros.Start, used_macros)
-		self.Layout.Macros.Start = macro_start
-		self._Layout = Layout:New()
-		if self.Layout.Images then
-			used_images = 16 * #self.Groups
-			image_start = self.Layout.Images.Overwrite and self.Layout.Images.Start or Obj.FindFreeRange('Image', self.Layout.Images.Start, used_images)
-		end 
-		self.Layout.Images.Start = image_start 
-	end 
-	return self
+    if #self.Objects > 15 then
+        return nil, "Max Picker Width exceeded"
+    end
+
+    self.Executors.RowPadding = self.Executors.Width - #self.Objects
+
+    local macro_start
+    local image_start
+    local used_macros
+    local used_images
+	Debug("  .. Trying to create Layout")
+    if self.Layout and self.Layout.Id then
+		Debug("  .. .. Found layout data")
+        used_macros = 16 * #self.Groups
+        macro_start = self.Layout.Macros.Overwrite and self.Layout.Macros.Start or
+                          Obj.FindFreeRange('Macro', self.Layout.Macros.Start, used_macros)
+        self.Layout.Macros.Start = macro_start
+        self._Layout = Layout:New(tonumber(self.Layout.Id))
+		Debug("  ..  .. Created Layout")
+        if self.Layout.Images then
+			Debug("  ..  .. Found image data")
+            used_images = 16 * #self.Groups
+            image_start = self.Layout.Images.Overwrite and self.Layout.Images.Start or
+                              Obj.FindFreeRange('Image', self.Layout.Images.Start, used_images)
+        end
+        self.Layout.Images.Start = image_start
+    end
+    return self
 end
 
-function Picker:New(o)
+function Picker:New(obj)
 
-	if not o or not o.Ranges or not o.Executors then
-		return nil, "Invalid properties provided"
-	end 	
-    local obj = setmetatable(o, self)
-    obj.__index = self     
+    if not obj or not obj.Ranges or not obj.Executors then
+        return nil, "Invalid properties provided"
+    end
+    setmetatable(obj, self)
+    self.__index = self
 
-	ApplyDefaults(obj, Picker.Defaults)
-	DebugTable("After Applying Defaults:", obj)
-	return obj:Init()
+    ApplyDefaults(obj, Picker.Defaults)
+
+    return obj:Init()
 end
-
 
 function Picker.prepareLayoutImages(guiImage, activeImage, inactiveImage, placeholder)
-    if (Obj.IsEmpty('Image', activeImage)) then Cmd("Copy Image %d At %d", placeholder, activeImage) end
-    if (Obj.IsEmpty('Image', inactiveImage)) then Cmd("Copy Image %d At %d", placeholder, inactiveImage) end
-	if (Obj.IsEmpty('Image', guiImage)) then Cmd("Copy Image %d At %d", inactiveImage, guiImage) end
+    if (Obj.isEmpty('Image', activeImage)) then
+        Cmd("Copy Image %d At %d", placeholder, activeImage)
+    end
+    if (Obj.isEmpty('Image', inactiveImage)) then
+        Cmd("Copy Image %d At %d", placeholder, inactiveImage)
+    end
+    if (Obj.isEmpty('Image', guiImage)) then
+        Cmd("Copy Image %d At %d", inactiveImage, guiImage)
+    end
 end
 
-function Picker:CreateLayoutItem(Row, col, Exec, PickerWidth)
-	local write_offset = (Row - 1) * 16 + col
-	local source_offset = (Row - 1) * (self.Layout.Images.GroupOffset or 0) + (col - 1)
-	
-	local macro = self.Layout.Macros.Start + write_offset
-	local active = self.Layout.Images.Active + source_offset
-	local inactive = self.Layout.Images.Inactive + source_offset
-	local picker = self.Layout.Images.Start + write_offset
-	local placeholder = self.Layout.Images.Placeholder
-	
-	local image, geometry = {}, {}
-	
-	local inactiveList = string.format("%d Thru %d", self.Layout.Images.Inactive, self.Layout.Images.Inactive + PickerWidth - 1)
-	local firstOfRow = self.Layout.Images.Picker + (Row - 1) * 16 + 1
+function Picker:CreateLayoutItem(Row, col, Exec)
+    local write_offset = (Row - 1) * 16 + col
+    local source_offset = (Row - 1) * (self.Layout.Images.GroupOffset or 0) + (col - 1)
 
-	Picker.prepareLayoutImages(picker, active, inactive, placeholder)
+    local macro = self.Layout.Macros.Start + write_offset
+    local active = self.Layout.Images.Active + source_offset
+    local inactive = self.Layout.Images.Inactive + source_offset
+    local picker = self.Layout.Images.Start + write_offset
+    local placeholder = self.Layout.Images.Placeholder
 
-	local macro_cmd = string.format(
-		"Go Executor %d.%d ; Copy Image %s At %d /o; Copy Image %d At %d /o", 
-		self.Executors.Page, 
-		Exec, 
-		inactiveList, 
-		firstOfRow, 
-		active, 
-		picker)
-	
-	Cmd('Store Macro %d', macro_id)
-	Cmd('Label Macro %d "%s"', macro_id, string.format("%s%sR%dC%d", self.VarsPrefix or '', self.VarsPrefix and '-' or '', Row, col))
-	Cmd('Store Macro 1.%d.1 "%s"', macro_id, macro_cmd)
-	
-	local XOffset = self.Layout.XOffset or 0
-	local YOffset = self.Layout.YOffset or 0					
-	
-	image.id = pickerImage
-	image.label = Obj:New("Image "..active_image):Label()
-	
-	for _, rot in pairs({'90', '180', '270'}) do
-		if (image.label):sub(-#rot) == rot then
-			image.rotate = rot
-		end
-	end
-	
-	Picker.ApplyDefaults(geometry, Picker.Defaults.Layout.ButtonGeometry)
-		
-	geometry.x = (col - 1) * (geometry.Width + geometry.XSpacing) + XOffset 
-	geometry.y = (Row - 1) * (geometry.Height + geometry.YSpacing) + YOffset
-	
-	self._Layout:addMacro(macro_id, geometry, image)
+    local image, geometry = {}, {}
+
+    local inactiveList = string.format("%d Thru %d", self.Layout.Images.Inactive,
+        self.Layout.Images.Inactive + self.Executors.Width - 1)
+    local firstOfRow = self.Layout.Images.Start + (Row - 1) * 16 + 1
+
+    Picker.prepareLayoutImages(picker, active, inactive, placeholder)
+
+    local macro_cmd = string.format("Go Executor %d.%d ; Copy Image %s At %d /o; Copy Image %d At %d /o",
+        self.Executors.Page, Exec, inactiveList, firstOfRow, active, picker)
+
+    Cmd('Store Macro %d', macro)
+    Cmd('Label Macro %d "%s"', macro,
+        string.format("%s%sR%dC%d", self.VarsPrefix or '', self.VarsPrefix and '-' or '', Row, col))
+    Cmd('Store Macro 1.%d.1 "%s"', macro, macro_cmd)
+
+    local XOffset = self.Layout.XOffset or 0
+    local YOffset = self.Layout.YOffset or 0
+
+    image.id = picker
+    image.label = Obj:New("Image " .. active):Label()
+
+    for _, rot in pairs({'90', '180', '270'}) do
+        if (image.label):sub(-#rot) == rot then
+            image.rotate = rot
+        end
+    end
+
+    ApplyDefaults(geometry, Picker.Defaults.Layout.ButtonGeometry)
+
+    geometry.X = (col - 1) * (geometry.Width + geometry.XSpacing) + XOffset
+    geometry.Y = (Row - 1) * (geometry.Height + geometry.YSpacing) + YOffset
+
+    self._Layout:addMacro(macro, geometry, image)
 end
 
 function Picker:Generate()
 
-	local Exec = self.Executors.Start or Picker.Defaults.Executors.Start	
+    local Exec = self.Executors.Start
 
-	local Row = 1
-	for _, group in pairs(self.Groups) do	
-		local g = sf.Obj:New(group)		
-		local group_fixtures_count = #g:getFixtures()
-		
-		local col = 1		
-		for _, obj in pairs(self.Objects) do			
-			
-			local obj = Obj:New(obj)
-			-- Translate Object id - useful for different gobo sets across groups
-			obj.Id = obj.Id + (self.Ranges.GroupOffset * (Row - 1))		
-			local macro = ''									
-			Cmd("ClearAll; Selfix %s; If %s", obj, group)			
-			local fixtures_count = #Obj.GetFixtures() -- Count from programmer's selection
-			Cmd("Clear")
-			
-			if (group_fixtures_count > 0) and (fixtures_count > 0) then			
-				local cmd = self.VarsPrefix and string.format("SetVar $_%s_G%d %d", self.VarsPrefix, Row, Exec)				
-				local opts = {
-					label = obj:Label(),
-					page = self.Executor.Page,
-					exec = Exec,
-					func = "Go",
-					cmd = cmd,
-					colorize = self.Executors.Colorize
-				}
-							
-				Executor.FromObject(group, obj, opts):Label(g:Label())
+    local Row = 1
+    for _, group in pairs(self.Groups) do
+        local g = Obj:New(group)
+        local group_fixtures_count = #g:GetFixtures()
 
-				if self.Layout and self.Layout.Id then
-					self:CreateLayoutItem(Row, col, Exec, PickerWidth)
-				end 
-			end 
-			Exec = Exec + 1 
-			col = col + 1
-			Cmd("ClearAll")
-		end 
-		Exec = Exec + RowPadding
-		Row = Row + 1
-		Cmd("ClearAll")
-	end 
-	Cmd("ClearAll")
-	if self.Layout and self.Layout.Id then 
-		self._Layout:Store(self.Layout.Id)
-	end 
-	return self
-end 
+        local col = 1
+        for _, obj in pairs(self.Objects) do
+
+            local obj = Obj:New(obj)
+            -- Translate Object id - useful for different gobo sets across groups
+            obj.Id = obj.Id + (self.Ranges.GroupOffset * (Row - 1))
+            local macro = ''
+            Cmd("ClearAll; Selfix %s; If %s", obj, group)
+            local fixtures_count = #Obj.GetFixtures() -- Count from programmer's selection
+            Cmd("Clear")
+
+            if (group_fixtures_count > 0) and (fixtures_count > 0) then
+                local cmd = self.VarsPrefix and string.format("SetVar $_%s_G%d %d", self.VarsPrefix, Row, Exec)
+                local opts = {
+                    label = obj:Label(),
+                    page = self.Executors.Page,
+                    exec = Exec,
+                    func = "Go",
+                    cmd = cmd,
+                    colorize = self.Executors.Colorize
+                }
+
+                _ = Executor.FromObject(group, obj, opts):Label(g:Label())
+
+                if self.Layout and self.Layout.Id then
+                    self:CreateLayoutItem(Row, col, Exec)
+                end
+            end
+            Exec = Exec + 1
+            col = col + 1
+            Cmd("ClearAll")
+        end
+        Exec = Exec + self.Executors.RowPadding
+        Row = Row + 1
+        Cmd("ClearAll")
+    end
+    Cmd("ClearAll")
+    if self.Layout and self.Layout.Id then
+        self._Layout:Store(self.Layout.Id)
+    end
+    return self
+end
 
 return _M
-
 
 -- Create an Executor matrix to be used in ActionButtons widgets
 -- Can create Macro matrix in a layout (with active/inactive image sources)
@@ -259,4 +267,4 @@ local myPicker = {
 		RegionWidth = nil					-- Whole picker height (calculated)
 	}
 }
-]]--
+]] --

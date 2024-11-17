@@ -1,8 +1,17 @@
 -- This file is part of ShowFunctions -- https://github.com/NazzTazz/ShowFunctions
 -- Layout module 
 
-local base = _G
-local Layout = { rectangles = {}, objects = {}, geometry = {}}; 
+local Obj = require("showfunctions.obj")
+local Layout = { 
+	Rectangles = {}, 
+	Objects = {}, 
+	Geometry = {
+		Left=0, Right=0, Top=0, Bottom=0, Width=0, Height=0
+	}
+}
+
+setmetatable(Layout, {__index = Obj})
+
 local _M = Layout 
 
 --- Creates a new Layout object.
@@ -13,27 +22,23 @@ local _M = Layout
 -- @return The new Layout object.
 -- @error If `args` is invalid or of an unsupported type, it raises an error.
 function Layout:New(args)
-    local obj = Obj:New()  -- Create an instance from the base class Obj
-    setmetatable(obj, Layout)  -- Set metatable to Layout to link to its methods
+    local obj = Obj:New(args)     -- Create an instance from the base class Obj
+    setmetatable(obj, self)       -- Set metatable to Layout to link to its methods
+	self.__index = self
 
     -- Initialize the object based on the provided argument type
     if args then
         if type(args) == 'string' then
             obj._Name = args
-        elseif type(args) == 'table' then
-            for k, v in pairs(args) do
-                obj[k] = v
-            end
         elseif type(args) == 'number' then
             obj._Name = "Layout " .. args
         else
             error("Layout:New() : Unsupported argument type. Expected string, table, or number.")
         end
     end
-
     -- If parsing is required (e.g., initialization logic), call Parse
-    obj:Parse()
 
+	Obj.Parse(obj)
     return obj
 end
 
@@ -44,10 +49,10 @@ end
 function Layout:PercentToAbsolute(geometry, gridsize)
 	local gridsize = gridsize or 0.05
     for _, v in ipairs{
-        {geometry.left, self.geometry.width},
-        {geometry.right, self.geometry.width},
-        {geometry.top, self.geometry.height},
-        {geometry.bottom, self.geometry.height}
+        {geometry.Left, self.Geometry.Width},
+        {geometry.Right, self.Geometry.Width},
+        {geometry.Top, self.Geometry.Height},
+        {geometry.Bottom, self.Geometry.Height}
     } do local coord, length = v[1], v[2]
         if coord and type(coord) == 'string' and string.sub(coord, -1) == '%' then
             coord = length * tonumber(string.sub(coord, 1, #coord - 1)) / 100
@@ -57,26 +62,30 @@ function Layout:PercentToAbsolute(geometry, gridsize)
 end
 
 function Layout:UpdateBounds(geometry)
+	Debug("Layout:UpdateBounds() ======================================")
+	DebugTable("Layout Geometry", self.Geometry)
+	DebugTable("Object Geometry", geometry)
+	Debug("Entering function     ======================================")
 	
 	-- Update each bound if needed
 
-	self.geometry.left   = math.min(tonumber(self.geometry.left),  geometry.x)
-	self.geometry.right  = math.max(tonumber(self.geometry.right), geometry.x + geometry.width)
-	self.geometry.top    = math.min(tonumber(self.geometry.top),   geometry.y)
-	self.geometry.bottom = math.max(tonumber(self.geometry.bottom),   geometry.y + geometry.height)
+	self.Geometry.Left   = math.min(tonumber(self.Geometry.Left),  geometry.X)
+	self.Geometry.Right  = math.max(tonumber(self.Geometry.Right), geometry.X + geometry.Width)
+	self.Geometry.Top    = math.min(tonumber(self.Geometry.Top),   geometry.Y)
+	self.Geometry.Bottom = math.max(tonumber(self.Geometry.Bottom),   geometry.Y + geometry.Height)
 
 	-- Calculate new footprint
 
-	self.geometry.width = self.geometry.right - self.geometry.left
-	self.geometry.height = self.geometry.bottom - self.geometry.top
-
+	self.Geometry.Width = self.Geometry.Right - self.Geometry.Left
+	self.Geometry.Height = self.Geometry.Bottom - self.Geometry.Top
+	DebugTable("New Layout Geometry", self.Geometry)
 end 
 
 function Layout:addRectangle(geometry, text)
 
 	self:PercentToAbsolute(geometry)
-	self.rectangles[#self.rectangles+1] = string.format(self.xmlTemplate.rectangle, geometry.x, geometry.y, 
-														geometry.height, geometry.width, text or "")
+	self.Rectangles[#self.Rectangles+1] = string.format(self.xmlTemplate.rectangle, geometry.X, geometry.Y, 
+														geometry.Height, geometry.Width, text or "")
 	self:UpdateBounds(geometry)	
 	return self
 end 
@@ -95,8 +104,8 @@ function Layout:addMacro(id, geometry, image)
 			extra = extra .. string.format(' image_rotation="%d°"', image.rotation)
 		end		
 	end    
-    self.objects[#self.objects+1] = string.format(self.xmlTemplate.macro, geometry.x or 0, geometry.y or 0, 
-												  geometry.height or 1, geometry.width or 1, style, extra, image_chunk, id)
+    self.Objects[#self.Objects+1] = string.format(self.xmlTemplate.macro, geometry.X or 0, geometry.Y or 0, 
+												  geometry.Height or 1, geometry.Width or 1, style, extra, image_chunk, id)
 	self:UpdateBounds(geometry)
 	return self
 end
@@ -111,12 +120,12 @@ function Layout:Store(id)
 	
 	file.data = io.open(file.xml, "w")	
     file.data:write(self.xmlTemplate.header)    
-    file.data:write(table.concat(self.objects))    
+    file.data:write(table.concat(self.Objects))    
     file.data:write('</CObjects>')	
 	
-	if #self.rectangles > 0 then	
+	if #self.Rectangles > 0 then	
 		file.data:write('<Rectangles>')
-		file.data:write(table.concat(self.rectangles))
+		file.data:write(table.concat(self.Rectangles))
 		file.data:write('</Rectangles>')	
 	end	
 	

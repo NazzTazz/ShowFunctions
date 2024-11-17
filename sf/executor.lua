@@ -1,8 +1,7 @@
 -- This file is part of ShowFunctions -- https://github.com/NazzTazz/ShowFunctions
 -- Executor module 
 
-local base = _G
-
+local Obj = require("showfunctions.obj")
 local Tools = require("showfunctions.tools")
 
 local Executor = { 
@@ -27,7 +26,7 @@ local _M = Executor
 -- function Executor:FromObject(group, obj, label, exec, cue, cmd, func, fade, offtime)
 -- label, exec, cue, cmd, func, fade, offtime
 function Executor.FromObject(group, obj, opts)
-	c = opts.colorize
+	local c = opts.colorize
 	if c then
 		if type(c) == 'table' and #c == 3 then
 			opts.appearance = string.format("/r=%d /g=%d /b=%d", c[1], c[2], c[3])
@@ -37,14 +36,18 @@ function Executor.FromObject(group, obj, opts)
 			opts.appearance = string.format("At %s", obj)
 		end 
 	end
-	opts.exec = opts.cue and string.format("Cue %d Executor %d.%d", opts.cue, opts.page or gma.show.getpage(),opts.exec) or string.format("Executor %s", opts.exec)
-	Cmd("Group %s; At %s; Store %s /o; ClearAll", group, obj, opts.exec)
-	if opts.label then Cmd('Label %s "%s"', opts.exec, opts.label) end
-	if opts.cmd then Cmd('Assign %s /cmd="%s"', opts.exec, opts.cmd) end 
-	if opts.func then Cmd ("Assign %s %s", opts.func, opts.exec) end 
-	if opts.fade then Cmd ("Assign Fade %d %s", opts.fade, opts.exec) end 
-	if opts.offtime then Cmd ("Assign %s /offtime=%d", opts.exec, opts.offtime) end 
-	if opts.appearance then Cmd("Appearance %s %s", opts.exec, opts.appearance) end 
+	
+	local exec = string.format("Executor %d.%d", opts.page, opts.exec)
+	local cue  = opts.cue and string.format("Cue %d Executor %d.%d", opts.cue, opts.page, opts.exec) or exec
+
+	Cmd("%s; At %s; Store %s /o; ClearAll", group, obj, cue)
+	if opts.label then Cmd('Label %s "%s"', cue, opts.label) end
+	if opts.cmd then Cmd('Assign %s /cmd="%s"', cue, opts.cmd) end 
+	if opts.func then Cmd ("Assign %s %s", opts.func, exec) end 
+	if opts.fade then Cmd ("Assign Fade %d %s", opts.fade, cue) end 
+	if opts.offtime then Cmd ("Assign %s /offtime=%d", exec, opts.offtime) end 
+	if opts.appearance then Cmd("Appearance %s %s", exec, opts.appearance) end 
+	return Obj:New(exec)
 end
 
 return _M

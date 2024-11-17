@@ -22,36 +22,39 @@ You should have received a copy of the GNU Lesser General Public License
 along with this program; if not, write to the Free Software Foundation,
 Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+    Naming Conventions:
+
+    localVariable
+    localFunction()  
+    
+    Package.Class:New()
+    Package.Class.StaticMethod() 
+    Package.Class.PublicMethod()
+    Package.Class.PublicMember
+    Package.Class._privateMember
+    Package.Class:__metamethod()    
+
 ]]--
 
-local base = _G
-
-local string = require("string")
-local math = require("math")
-local table = require("table")
-
--- PROXIES
+local string, math, table = require("string"), require("math"), require("table")
 
 Show, User, Gui, Object = gma.show, gma.user, gma.gui, gma.show.getobj;
 
--- SUB-MODULES AND PACKAGE TABLES
+local modules = {'Tools', 'Obj', 'Executor', 'Layout', 'Bitmap', 'Picker'}
 
-local SF = { 
+local Sf = { 
 	_debug = true,
-	
-	Tools = require("showfunctions.tools"),
-	Obj = require("showfunctions.obj"),
-	Executor = require("showfunctions.executor"),
-	Layout = require("showfunctions.layout"),
-	Bitmap = require("showfunctions.bitmap"),
-	Picker = require("showfunctions.picker")
 }
 
-local _M = SF
+for _, mod in pairs(modules) do
+    Sf[mod] = require("showfunctions."..string.lower(mod))
+end
+
+local _M = Sf
 
 -- Random crap that won't exist anymore soon
 
-function _M.createSpecials(config)
+function Sf.createSpecials(config)
 	local exec = 101
 	local slot = 0
 
@@ -93,27 +96,26 @@ function _M.createSpecials(config)
 end
 
 
-function _M._show_progress(view, index)    
+function Sf._show_progress(view, index)    
 
-    hView = io.open(gma.show.getvar('PATH').."/importexport/tempview.xml", "w")
+    index = index or 0
+
+    local view = io.open(gma.show.getvar('PATH').."/importexport/tempview.xml", "w")
     
     local xml = '<?xml version="1.0" encoding="utf-8"?><MA xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://schemas.malighting.de/grandma2/xml/MA" xsi:schemaLocation="http://schemas.malighting.de/grandma2/xml/MA http://schemas.malighting.de/grandma2/xml/3.9.60/MA.xsd" major_vers="3" minor_vers="9" stream_vers="60">    <Info datetime="" showfile="" /><View index="1" name="PROGRESSION" display_mask="32"><BitMap width="96" height="48"><Image>'
     hView:write(xml)    
     
     local progress = math.floor(index * 32/100)
     
-    local filled = progress
-    local black = 32 - progress
+    local filled = progress; local black = 32 - progress
     
-    local white_chunk = "fwAA/38AAP9/AAD/"
-    local black_chunk = "AAAA/wAAAP8AAAD/"
+    local white_chunk = "fwAA/38AAP9/AAD/"; local black_chunk = "AAAA/wAAAP8AAAD/"
     
     local scanline = white_chunk:rep(filled) .. black_chunk:rep(black)
     
-    hView:write(string.rep(scanline, 48))    
-    
-    hView:write('</Image></BitMap></View></MA>')
-    hView:close()
+    view:write(string.rep(scanline, 48))        
+    view:write('</Image></BitMap></View></MA>')
+    view:close()
 
     gma.cmd('Import "tempview.xml" At View '.. view ..' /nc /o')
 
@@ -121,7 +123,7 @@ function _M._show_progress(view, index)
 
 end
 
-function _M.import_gobo_image(data, active_index, inactive_index, suffix)
+function Sf.import_gobo_image(data, active_index, inactive_index, suffix)
     gma.echo("Importing gobo image to show (UserImages "..active_index.."+"..inactive_index..")")
     
     suffix = suffix or ''

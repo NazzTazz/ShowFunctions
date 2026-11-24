@@ -19,28 +19,34 @@ function Obj:Handle()
     return Object.handle(self._Name or self:Name())
 end
 
+--- Splits an object reference into type, prefix and id.
+-- "Preset 4.12" -> "Preset", 4, 12 ; "Group 3" -> "Group", nil, 3 ; "311" -> nil, nil, 311
+-- The type is made of letters only, and a prefix exists only when there is a dot:
+-- a bare number is never split into type/prefix/id.
+-- @param str The reference to split.
+-- @return string|nil, number|nil, number|nil Type, prefix and id (all nil if str is not a reference).
+function Obj.SplitName(str)
+    str = (str or ''):match("^%s*(.-)%s*$")
+    local objectType, rest = str:match("^(%a*)%s*(.-)$")
+    local prefix, id = rest:match("^(%d+)%.(%d+)$")
+    if not id then
+        id = rest:match("^(%d+)$")
+    end
+    if not id then
+        return nil, nil, nil
+    end
+    return (#objectType > 0) and objectType or nil, tonumber(prefix), tonumber(id)
+end
+
 --- Parses the object name to extract components.
 -- Sets ObjectType, Prefix, and Id from the object name.
 -- @return table The object itself with updated attributes.
 function Obj.Parse(self)
-    Debug("-> Obj.Parse()")
     if self._Name then
-        -- Utilisation de string.match pour extraire les composants
-        local objectType, prefix, id = string.match(self._Name, "^(%S*)%s*(%d*)%.?(%d+)$")
-        
-        -- Affecter les résultats à l'objet
-        self.ObjectType = (objectType and #objectType > 0) and objectType or nil
-        self.Prefix = (prefix and #prefix > 0) and tonumber(prefix) or nil
-        self.Id = tonumber(id)
-
-        -- Debugging avec gestion des valeurs `nil`
-        Debug("O_n: %s Ot: %s Prefix: %s Id: %s", 
-            tostring(self._Name), 
-            tostring(self.ObjectType), 
-            tostring(self.Prefix), 
-            tostring(self.Id))
+        self.ObjectType, self.Prefix, self.Id = Obj.SplitName(self._Name)
+        Debug("Obj.Parse() %s -> Ot: %s Prefix: %s Id: %s",
+            tostring(self._Name), tostring(self.ObjectType), tostring(self.Prefix), tostring(self.Id))
     end
-    Debug("<- Obj.Parse()")
     return self
 end
 
@@ -64,8 +70,8 @@ end
 -- @return string The formatted object name.
 function Obj:Name()
 	
+	assert(self.ObjectType and self.Id, "Obj:Name(): object without type or id")
 	self._Name = string.format("%s %s%d", Obj._Normalize(self.ObjectType), self.Prefix and self.Prefix .. '.' or '', self.Id)
-	Debug("> Obj:Name() Ot: %s Prefix: %s Id: %d Name: %s", self.ObjectType, tostring(self.Prefix), self.Id, self._Name) 
     return self._Name
 end
 
@@ -100,14 +106,21 @@ function Obj:Label(label)
     if label then
         Cmd('Label %s "%s"', self:Name(), label)
     end
-    return Object.label(self:Handle())
+    local handle = self:Handle()
+    return handle and Object.label(handle) -- nil if the object doesn't exist (or has no label)
 end
 
---- Splits an expression chunk into components.
+--- Splits a "A Thru B" chunk.
+-- The right bound inherits type and prefix from the left one: "Preset 4.1 Thru 10" -> Preset 4.1 .. Preset 4.10
 -- @param chunk A string chunk to split.
--- @return string, string, string, string, string Components of the split chunk.
+-- @return string|nil, number|nil, number, number|nil, number Type, fromPrefix, fromId, toPrefix, toId (nil if invalid).
 function Obj.SplitChunk(chunk)
-    return chunk:upper():match("^(%S*)%s*(%d*)%.?(%d+)%s+THRU%s*(%d*)%.?(%S+)$")
+    local left, right = chunk:upper():match("^(.-)%s*THRU%s*(.-)$")
+    if not left then return nil end
+    local objectType, fromPrefix, fromId = Obj.SplitName(left)
+    local toType, toPrefix, toId = Obj.SplitName(right)
+    if not (fromId and toId) then return nil end
+    return objectType or toType, fromPrefix, fromId, toPrefix or fromPrefix, toId
 end
 
 --- Checks if a slot is empty.
@@ -151,34 +164,40 @@ function Obj.FindFreeRange(objectType, firstId, length, harmonize)
 end
 
 --- Builds a list of objects based on the provided expression.
+-- Each element inherits type and prefix from the previous one when it has none:
+-- "Fixture 123 Thru 127 + 2477 Thru 2483 + 311" -> Fixture 123 .. Fixture 127, Fixture 2477 .. Fixture 2483, Fixture 311
 -- @param expression A string expression (e.g., "Preset 2.1 Thru 2.3").
 -- @param objectType (optional) The default object type if not specified in the expression.
 -- @return table A list of object names matching the expression.
 function Obj.List(expression, objectType)
-	Debug("> Obj.List() call | expression is %s: '%s', objectType is %s: %s", type(expression), tostring(expression), type(objectType), tostring(objectType))
     local objects = {}
-	local objectType = objectType
-	local prefix = nil  
+    local prefix = nil
+
+    local function name(t, p, id)
+        assert(t, string.format("Obj.List(): no object type for '%s'", expression))
+        return string.format("%s %s%d", Obj._Normalize(t), p and p .. '.' or '', id)
+    end
+
     for element in expression:gmatch("([^+]+)") do
         element = element:match("^%s*(.-)%s*$") -- trim whitespace
         if element:upper():find('THRU') then
-            local _objectType, fromPrefix, fromId, toPrefix, toId = Obj.SplitChunk(element)
-            fromPrefix = #fromPrefix > 0 and fromPrefix or prefix 
-			objectType = #_objectType > 0 and _objectType or objectType
-            local fromId, toId = tonumber(fromId), tonumber(toId)
-            for id = fromId, toId do
-                table.insert(objects, string.format("%s %s%d", objectType, fromPrefix and fromPrefix .. '.' or '', id))
+            local t, fromPrefix, fromId, toPrefix, toId = Obj.SplitChunk(element)
+            assert(fromId, string.format("Obj.List(): can't read '%s'", element))
+            objectType = t or objectType
+            fromPrefix = fromPrefix or prefix
+            if toPrefix and fromPrefix and toPrefix ~= fromPrefix then
+                error(string.format("Obj.List(): '%s' spans two pools, not supported", element))
             end
-			prefix = fromPrefix
-        else
-			Debug("Adding Element: %s", element)
-            local o = Obj:New(element)
-            if objectType then
-                o.ObjectType = objectType
+            for id = fromId, toId, (toId >= fromId) and 1 or -1 do
+                objects[#objects + 1] = name(objectType, fromPrefix, id)
             end
-			local e = o:Parse():Name()
-			Debug("Fix name as %s", e)
-            table.insert(objects, e)
+            prefix = fromPrefix
+        elseif #element > 0 then
+            local t, p, id = Obj.SplitName(element)
+            assert(id, string.format("Obj.List(): can't read '%s'", element))
+            objectType = t or objectType
+            prefix = p or (t == nil and prefix) or nil
+            objects[#objects + 1] = name(objectType, prefix, id)
         end
     end
     return objects
@@ -223,7 +242,7 @@ function Obj.GetFixtures(source)
 
     for line in io.lines(file.path) do
         if (string.find(line, 'Subfixture fix_id') or string.find(line, 'Subfixture cha_id')) then
-            objectType = string.find(line, 'fix_id') and 'Fixture ' or 'Channel '
+            objectType = string.find(line, 'fix_id') and 'Fixture' or 'Channel'
             local indices = {string.find(line, '\"%d+\"')}
             indices[1], indices[2] = indices[1] + 1, indices[2] - 1
             fixtures[#fixtures + 1] = string.format("%s %s", objectType, string.sub(line, indices[1], indices[2]))

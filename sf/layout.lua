@@ -26,6 +26,12 @@ function Layout:New(args)
     setmetatable(obj, self)       -- Set metatable to Layout to link to its methods
 	self.__index = self
 
+    -- Per-instance content: without this, every Layout shares the class tables
+    -- and a second picker would also contain the buttons of the first one.
+    obj.Rectangles = {}
+    obj.Objects = {}
+    obj.Geometry = { Left = 0, Right = 0, Top = 0, Bottom = 0, Width = 0, Height = 0 }
+
     -- Initialize the object based on the provided argument type
     if args then
         if type(args) == 'string' then
@@ -48,15 +54,16 @@ end
 -- @return None. The geometry table is updated with the absolute values.
 function Layout:PercentToAbsolute(geometry, gridsize)
 	local gridsize = gridsize or 0.05
-    for _, v in ipairs{
-        {geometry.Left, self.Geometry.Width},
-        {geometry.Right, self.Geometry.Width},
-        {geometry.Top, self.Geometry.Height},
-        {geometry.Bottom, self.Geometry.Height}
-    } do local coord, length = v[1], v[2]
+    -- The result is written back into geometry (it used to be computed and lost).
+    -- Numbers are left untouched; only "50%"-like strings are converted.
+    for key, length in pairs{
+        X = self.Geometry.Width, Width = self.Geometry.Width,
+        Y = self.Geometry.Height, Height = self.Geometry.Height
+    } do
+        local coord = geometry[key]
         if coord and type(coord) == 'string' and string.sub(coord, -1) == '%' then
             coord = length * tonumber(string.sub(coord, 1, #coord - 1)) / 100
-            coord = math.floor(coord / gridsize + 0.5) * gridsize
+            geometry[key] = math.floor(coord / gridsize + 0.5) * gridsize
         end
     end
 end
@@ -100,8 +107,9 @@ function Layout:addMacro(id, geometry, image)
 		extra = ' image_size="Fit"'
 		image_chunk = string.format('<image name="Image"><No>8</No><No>%d</No></image>', image.id)
 		
-		if image.rotation and (image.rotation == 90 or image.rotation == 180 or image.rotation == 270) then
-			extra = extra .. string.format(' image_rotation="%d°"', image.rotation)
+		local rotation = tonumber(image.rotation)
+		if rotation == 90 or rotation == 180 or rotation == 270 then
+			extra = extra .. string.format(' image_rotation="%d°"', rotation)
 		end		
 	end    
     self.Objects[#self.Objects+1] = string.format(self.xmlTemplate.macro, geometry.X or 0, geometry.Y or 0, 

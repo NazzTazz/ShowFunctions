@@ -27,7 +27,7 @@ local Picker = {
             Images = {
                 GroupOffset = 0,
                 Start = 500,
-                PlaceHolder = 15,
+                Placeholder = 15,
                 Overwrite = true
             },
             ButtonGeometry = {
@@ -90,6 +90,9 @@ function Picker:Init()
 		Debug("  ..  .. Created Layout")
         if self.Layout.Images then
 			Debug("  ..  .. Found image data")
+            if not (self.Layout.Images.Active and self.Layout.Images.Inactive) then
+                return nil, "Layout.Images.Active and Layout.Images.Inactive are required with a Layout"
+            end
             used_images = 16 * #self.Groups
             image_start = self.Layout.Images.Overwrite and self.Layout.Images.Start or
                               Obj.FindFreeRange('Image', self.Layout.Images.Start, used_images)
@@ -154,15 +157,17 @@ function Picker:CreateLayoutItem(Row, col, Exec)
     local YOffset = self.Layout.YOffset or 0
 
     image.id = picker
-    image.label = Obj:New("Image " .. active):Label()
+    image.label = Obj:New("Image " .. active):Label() or ''
 
-    for _, rot in pairs({'90', '180', '270'}) do
-        if (image.label):sub(-#rot) == rot then
-            image.rotate = rot
+    -- An active image labelled "...90", "...180" or "...270" is rotated in the layout
+    for _, rot in pairs({90, 180, 270}) do
+        if image.label:sub(-#tostring(rot)) == tostring(rot) then
+            image.rotation = rot
         end
     end
 
-    ApplyDefaults(geometry, Picker.Defaults.Layout.ButtonGeometry)
+    -- The picker's own geometry (defaults already applied by Picker:New), not the global defaults
+    ApplyDefaults(geometry, self.Layout.ButtonGeometry)
 
     geometry.X = (col - 1) * (geometry.Width + geometry.XSpacing) + XOffset
     geometry.Y = (Row - 1) * (geometry.Height + geometry.YSpacing) + YOffset

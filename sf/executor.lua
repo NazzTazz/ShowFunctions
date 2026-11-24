@@ -44,8 +44,10 @@ function Executor.FromObject(group, obj, opts)
 	if opts.label then Cmd('Label %s "%s"', cue, opts.label) end
 	if opts.cmd then Cmd('Assign %s /cmd="%s"', cue, opts.cmd) end 
 	if opts.func then Cmd ("Assign %s %s", opts.func, exec) end 
-	if opts.fade then Cmd ("Assign Fade %d %s", opts.fade, cue) end 
-	if opts.offtime then Cmd ("Assign %s /offtime=%d", exec, opts.offtime) end 
+	-- %s and not %d: a fade of 0.5 s must stay 0.5 (and %d errors on decimals in Lua 5.3)
+	-- Same word order as createSpecials: "Assign Cue 4 Fade 0.8 Exec ..."
+	if opts.fade then Cmd("Assign Cue %d Fade %s Executor %d.%d", opts.cue or 1, opts.fade, opts.page, opts.exec) end
+	if opts.offtime then Cmd("Assign %s /offtime=%s", exec, opts.offtime) end
 	if opts.appearance then Cmd("Appearance %s %s", exec, opts.appearance) end 
 	return Obj:New(exec)
 end

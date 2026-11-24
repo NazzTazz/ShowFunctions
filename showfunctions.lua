@@ -47,7 +47,14 @@ local Sf = {
 }
 
 for _, mod in pairs(modules) do
-    Sf[mod] = require("showfunctions."..string.lower(mod))
+    if mod == 'Bitmap' then
+        -- Work in progress, and depends on socket/mime: it must not prevent the
+        -- rest of the library (pickers...) from loading if it fails.
+        local ok, result = pcall(require, "showfunctions.bitmap")
+        if ok then Sf.Bitmap = result else gma.echo("ShowFunctions: Bitmap module not loaded: " .. tostring(result)) end
+    else
+        Sf[mod] = require("showfunctions."..string.lower(mod))
+    end
 end
 
 local _M = Sf
